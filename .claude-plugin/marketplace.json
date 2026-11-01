@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dstack",
+  "description": "chulanpro5's personal Claude Code plugins",
+  "owner": { "name": "chulanpro5" },
+  "plugins": [
+    {
+      "name": "dstack",
+      "description": "Skills: project-memory, telegram-bridge (+ opt-in Telegram permission-approval hook).",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

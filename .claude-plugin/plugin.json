@@ -1,0 +1,8 @@
+{
+  "name": "dstack",
+  "description": "Personal Claude Code skills: project-memory (durable memory/ folder) and telegram-bridge (talk to a session through your own Telegram bot, optional Telegram approval of permission prompts).",
+  "version": "0.1.0",
+  "author": { "name": "chulanpro5" },
+  "homepage": "https://github.com/chulanpro5/dstack",
+  "keywords": ["memory", "telegram", "remote", "cloud"]
+}

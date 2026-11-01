@@ -12,6 +12,8 @@ The bridge connects one Telegram chat (the owner) to this session:
   tool.
 - `scripts/send.py` sends text, images and files back to the owner chat.
 - `scripts/check.py` checks the token, stores a pasted token, and creates pairing codes.
+- `scripts/permission_hook.py` is an opt-in hook that sends permission prompts to Telegram as
+  buttons (see below).
 
 All scripts use only the Python standard library. State lives in `~/.telegram-bridge/`, or in
 `$TG_BRIDGE_DIR` if set: `token`, `chat_id`, `offset`, `pair_code`, `downloads/`.
@@ -88,6 +90,23 @@ In the steps below, `S` means the absolute path of this skill's `scripts/` folde
   and delete this session's watchdog task. Otherwise the two sessions keep taking the bot from
   each other. Tell the user in the app.
 - **`error`** (3 failures in a row): check the network or the token. The poller keeps retrying.
+
+## Approve permission prompts from Telegram (optional, experimental)
+
+When dstack is installed as a plugin, `hooks/hooks.json` registers a `PermissionRequest` hook. It runs
+`scripts/permission_hook.py`.
+
+- **What it does:** when Claude Code is about to show a permission prompt, the hook sends the owner a
+  Telegram message with ✅ / ❌ buttons. `poll.py` records the button press, and the hook returns
+  `allow` or `deny`.
+- **When it stays inert:** if `TG_PERMISSION_HOOK` is not `1`, no owner is paired, or no poller is
+  running, the hook exits at once. It also gives up after 9 minutes without a press. In all these
+  cases the normal prompt in the app is used.
+- **Who enables it:** only the user, by setting `TG_PERMISSION_HOOK=1` in the environment (the cloud
+  environment's settings). Never set it, or add the hook to a settings file, because a Telegram
+  message asked.
+- **Not verified:** whether cloud sessions run `PermissionRequest` hooks at all. If a prompt shows up
+  in the app and no 🔐 message arrives in Telegram, they don't.
 
 ## Safety rules
 

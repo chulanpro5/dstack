@@ -1,0 +1,17 @@
+{
+  "description": "telegram-bridge: ask the Telegram owner to approve permission prompts. Inert unless TG_PERMISSION_HOOK=1 and the bridge poller is running.",
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/telegram-bridge/scripts/permission_hook.py\"",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}
