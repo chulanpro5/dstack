@@ -7,6 +7,7 @@ Two ways to run it:
                                    with no output (Bash run_in_background: one wake-up per message)
 Events:
   {"chat_id","from","text"[,"file"]}   a message from the owner
+  {...,"group":"<title>"}              the owner wrote in an allowed group (check.py --allow-chat)
   {"event":"owner_registered",...}       pairing succeeded
   (button presses on permission requests are handled silently, see permission_hook.py)
   {"event":"taken_over"}                 another session started polling this bot; we exit
@@ -40,7 +41,7 @@ while True:
         sys.exit(0)
     if time.time() > DEADLINE:
         sys.exit(0)
-    params = {"timeout": 25, "allowed_updates": json.dumps(["message", "callback_query"])}
+    params = {"timeout": 25, "allowed_updates": json.dumps(["message", "callback_query", "my_chat_member"])}
     if tg.rd("offset"):
         params["offset"] = tg.rd("offset")
     try:
@@ -70,6 +71,10 @@ while True:
             tg.api("answerCallbackQuery", {"callback_query_id": cq["id"],
                                            "text": ("Đã ghi nhận" if ok else "Không có quyền")})
             continue
+        mcm = u.get("my_chat_member")
+        if mcm:  # the bot was added to / removed from a group: record the chat ID
+            tg.note_chat(mcm["chat"], mcm.get("new_chat_member", {}).get("status"))
+            continue
         m = u.get("message")
         if not m:
             continue
@@ -84,10 +89,18 @@ while True:
                 emit({"event": "owner_registered", "chat_id": cid,
                       "from": m.get("from", {}).get("first_name")})
             continue  # unpaired: ignore everything else silently
+        group = None
         if cid != own:
-            continue
+            tg.note_chat(m["chat"])  # lets check.py --chats show the ID; the text is dropped
+            # In a group the owner allowed, only the owner's own messages count
+            # (a private chat ID equals that user's ID).
+            if cid not in tg.allowed_chats() or str(m.get("from", {}).get("id")) != own:
+                continue
+            group = m["chat"].get("title") or cid
         ev = {"chat_id": cid, "from": m.get("from", {}).get("first_name"),
               "text": text or "[non-text message]"}
+        if group:
+            ev["group"] = group
         for kind in ("photo", "document", "voice", "audio", "video"):
             if kind in m:
                 f = m[kind][-1] if kind == "photo" else m[kind]

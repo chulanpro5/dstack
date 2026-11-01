@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Send to the owner chat.
+"""Send to the owner chat (or, with --chat, to a chat allowed by check.py --allow-chat).
 
   send.py "text"                      plain text (auto-split at 4096 chars)
+  send.py -- "--text"                 text that starts with "--"
   send.py --file PATH [--caption C]   image -> sendPhoto, anything else -> sendDocument
   send.py --get FILE_ID [--out DIR]   download a file the owner sent (prints local path)
+  --chat ID                           send text/--file to that chat instead of the owner chat
+  --help                              print this help (nothing is sent)
 """
 import json, mimetypes, sys, uuid, urllib.request
 from pathlib import Path
@@ -23,9 +26,37 @@ def multipart(method, fields, file_field, path):
         return json.load(r)
 
 args = sys.argv[1:]
+if "--" in args:  # everything after "--" is message text, even if it looks like a flag
+    i = args.index("--")
+    args, literal = args[:i], args[i + 1:]
+else:
+    literal = []
+if args[:1] in (["--help"], ["-h"]):
+    print(__doc__.strip())
+    sys.exit()
+
 chat = tg.owner()
 if not chat:
     sys.exit("No owner chat yet: pair first (check.py --pair).")
+if "--chat" in args:
+    i = args.index("--chat")
+    if i + 1 >= len(args):
+        sys.exit("--chat needs a chat ID")
+    target = args[i + 1]
+    del args[i:i + 2]
+    if target != chat and target not in tg.allowed_chats():
+        sys.exit(f"Chat {target} is not allowed. The user can allow it in the session: "
+                 "check.py --allow-chat ID (see check.py --chats).")
+    chat = target
+
+KNOWN = {"--get": 1, "--out": 1, "--file": 1, "--caption": 1}
+i = 0
+while i < len(args):  # refuse unknown flags instead of sending them as text
+    if args[i].startswith("--"):
+        if args[i] not in KNOWN:
+            sys.exit(f"Unknown option {args[i]} (see send.py --help; use -- before text starting with --)")
+        i += KNOWN[args[i]]
+    i += 1
 
 if args[:1] == ["--get"]:
     f = tg.api("getFile", {"file_id": args[1]})["result"]
@@ -42,7 +73,7 @@ elif args[:1] == ["--file"]:
                   "photo" if is_img else "document", path)
     print("ok" if r.get("ok") else r)
 else:
-    text = " ".join(args) if args else sys.stdin.read()
+    text = " ".join(args + literal) if args or literal else sys.stdin.read()
     for i in range(0, max(len(text), 1), 4000):
         r = tg.api("sendMessage", {"chat_id": chat, "text": text[i:i + 4000]})
         if not r.get("ok"):

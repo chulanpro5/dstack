@@ -71,3 +71,19 @@ def wr(name, value, mode=0o600):
 
 def owner():
     return rd("chat_id") or os.environ.get("TG_OWNER_CHAT_ID")
+
+
+def allowed_chats():
+    """Extra chats (groups) the owner allowed, one ID per line in STATE/allowed_chats."""
+    return {l.strip() for l in (rd("allowed_chats") or "").splitlines() if l.strip()}
+
+
+def note_chat(chat, members_status=None):
+    """Remember a non-owner chat (ID, title, type only, never message text) for check.py --chats."""
+    seen = json.loads(rd("seen_chats") or "{}")
+    e = seen.setdefault(str(chat["id"]), {})
+    e.update({"title": chat.get("title") or chat.get("username") or chat.get("first_name"),
+              "type": chat.get("type")})
+    if members_status:
+        e["bot_status"] = members_status
+    wr("seen_chats", json.dumps(seen, ensure_ascii=False))
