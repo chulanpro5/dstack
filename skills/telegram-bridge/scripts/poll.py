@@ -8,6 +8,7 @@ Two ways to run it:
 Events:
   {"chat_id","from","text"[,"file"]}   a message from the owner
   {"event":"owner_registered",...}       pairing succeeded
+  (button presses on permission requests are handled silently, see permission_hook.py)
   {"event":"taken_over"}                 another session started polling this bot; we exit
   {"event":"error",...}                  3 consecutive failures (transient ones stay quiet)
 """
@@ -39,7 +40,7 @@ while True:
         sys.exit(0)
     if time.time() > DEADLINE:
         sys.exit(0)
-    params = {"timeout": 25, "allowed_updates": json.dumps(["message"])}
+    params = {"timeout": 25, "allowed_updates": json.dumps(["message", "callback_query"])}
     if tg.rd("offset"):
         params["offset"] = tg.rd("offset")
     try:
@@ -58,6 +59,17 @@ while True:
     fails = 0
     for u in data["result"]:
         tg.wr("offset", u["update_id"] + 1)
+        cq = u.get("callback_query")
+        if cq:  # button press on a permission request (see permission_hook.py)
+            data = cq.get("data", "")
+            ok = tg.owner() and str(cq["from"]["id"]) == tg.owner() and data.startswith("perm:")
+            if ok:
+                _, rid, choice = data.split(":", 2)
+                (tg.STATE / "decisions").mkdir(exist_ok=True)
+                tg.wr(f"decisions/{rid}", choice)
+            tg.api("answerCallbackQuery", {"callback_query_id": cq["id"],
+                                           "text": ("Đã ghi nhận" if ok else "Không có quyền")})
+            continue
         m = u.get("message")
         if not m:
             continue
