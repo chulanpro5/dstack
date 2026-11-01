@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Long-poll getUpdates and print one JSON line per message from the owner chat.
 
-Meant to run under the Monitor tool: every stdout line becomes an event.
+Two ways to run it:
+  poll.py                          loop forever (Monitor tool: every stdout line is an event)
+  poll.py --once [--max-seconds N] exit after the first batch that has an event, or after N seconds
+                                   with no output (Bash run_in_background: one wake-up per message)
 Events:
   {"chat_id","from","text"[,"file"]}   a message from the owner
   {"event":"owner_registered",...}       pairing succeeded
@@ -18,8 +21,24 @@ except OSError:
     sys.exit(0)  # a poller is already running in this container
 
 tg.token()  # fail fast if there is no token
+ONCE = "--once" in sys.argv
+DEADLINE = time.time() + (float(sys.argv[sys.argv.index("--max-seconds") + 1])
+                          if "--max-seconds" in sys.argv else float("inf"))
+emitted = False
+
+
+def emit(obj):
+    global emitted
+    emitted = True
+    print(json.dumps(obj, ensure_ascii=False), flush=True)
+
+
 fails = 0
 while True:
+    if ONCE and emitted:
+        sys.exit(0)
+    if time.time() > DEADLINE:
+        sys.exit(0)
     params = {"timeout": 25, "allowed_updates": json.dumps(["message"])}
     if tg.rd("offset"):
         params["offset"] = tg.rd("offset")
@@ -29,11 +48,11 @@ while True:
         data = {"ok": False, "description": str(e)}
     if not data.get("ok"):
         if data.get("error_code") == 409:
-            print(json.dumps({"event": "taken_over", "detail": data.get("description")}), flush=True)
+            emit({"event": "taken_over", "detail": data.get("description")})
             sys.exit(0)
         fails += 1
         if fails == 3:
-            print(json.dumps({"event": "error", "detail": str(data.get("description"))[:200]}), flush=True)
+            emit({"event": "error", "detail": str(data.get("description"))[:200]})
         time.sleep(10)
         continue
     fails = 0
@@ -50,8 +69,8 @@ while True:
             if pc and time.time() < pc["expires"] and text.strip() == pc["code"]:
                 tg.wr("chat_id", cid)
                 (tg.STATE / "pair_code").unlink(missing_ok=True)
-                print(json.dumps({"event": "owner_registered", "chat_id": cid,
-                                  "from": m.get("from", {}).get("first_name")}), flush=True)
+                emit({"event": "owner_registered", "chat_id": cid,
+                      "from": m.get("from", {}).get("first_name")})
             continue  # unpaired: ignore everything else silently
         if cid != own:
             continue
@@ -61,4 +80,4 @@ while True:
             if kind in m:
                 f = m[kind][-1] if kind == "photo" else m[kind]
                 ev["file"] = {"kind": kind, "file_id": f["file_id"], "name": f.get("file_name")}
-        print(json.dumps(ev, ensure_ascii=False), flush=True)
+        emit(ev)
